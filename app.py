@@ -14,10 +14,15 @@ warnings.filterwarnings("ignore", category=UserWarning, module="ctranslate2")
 # --- Load environment variables once ---
 load_dotenv()
 
-# --- Supabase Storage client ---
-SUPABASE_URL = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Get credentials (Streamlit Secrets first, then .env)
+SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("Supabase credentials are missing! Please set them in Streamlit secrets or .env.")
+else:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="Your Therapist", page_icon="💜", layout="wide")
