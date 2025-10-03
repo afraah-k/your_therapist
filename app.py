@@ -181,8 +181,7 @@ if role == "User / Client":
 
             _, col2, _ = st.columns([1, 2, 1])
             with col2:
-                # Replace with online Lottie animation instead of local path
-                lottie_json = requests.get("https://lottie.host/ef87f43a.json").json()
+                lottie_json = load_lottiefile("animations/mental_wellbeing.json")
                 st_lottie(lottie_json, height=250, key="mental_wellbeing")
                 st.markdown(
                     """
@@ -197,6 +196,7 @@ if role == "User / Client":
                     unsafe_allow_html=True
                 )
 
+
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
     if "therapist_all_submitted" not in st.session_state:
@@ -205,8 +205,7 @@ elif role == "Therapist":
     if st.session_state["therapist_all_submitted"]:
         _, col2, _ = st.columns([1, 2, 1])
         with col2:
-            # Replace with online Lottie animation
-            confetti_json = requests.get("https://lottie.host/5e8c77.json").json()
+            confetti_json = load_lottiefile("animations/success_confetti.json")
             st_lottie(confetti_json, height=250, key="confetti")
             st.markdown(
                 """
@@ -223,6 +222,7 @@ elif role == "Therapist":
                 """,
                 unsafe_allow_html=True
             )
+
             if st.button("🏠 Back to Home"):
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
