@@ -21,7 +21,18 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     st.error("Supabase credentials are missing! Please set them in Streamlit secrets or .env.")
     st.stop()
 
+# Create Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- Test connection ---
+try:
+    # Just try selecting 1 row from a small table
+    test = supabase.table("users").select("id").limit(1).execute()
+    st.success("✅ Connected to Supabase successfully!")
+except Exception as e:
+    st.error(f"⚠️ Could not connect to Supabase: {e}")
+    st.stop()
+
 
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="Your Therapist", page_icon="💜", layout="wide")
