@@ -15,8 +15,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="ctranslate2")
 load_dotenv()
 
 # --- Supabase Storage client ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Streamlit Page Config ---
