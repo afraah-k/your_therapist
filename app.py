@@ -332,6 +332,7 @@ elif role == "Therapist":
                         audio_url = f"{SUPABASE_URL}/storage/v1/object/public/therapist-audio/{file_path}"
 
                     if audio_bytes or text_answer:
+                        # app.py (Final attempt at fixing on_conflict)
                         supabase.table("therapist_answers").upsert(
                         {
                             "therapist_id": st.session_state["therapist_id"],
@@ -339,8 +340,8 @@ elif role == "Therapist":
                             "answer_text": text_answer if text_answer else None,
                             "audio_url": audio_url
                         },
-                        # This must be the column list to match the composite unique index.
-                        on_conflict=["therapist_id", "question_id"]
+                        # Revert to using the explicit constraint name:
+                        on_conflict="unique_therapist_question"
                     ).execute()
 
 
