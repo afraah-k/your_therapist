@@ -332,14 +332,15 @@ elif role == "Therapist":
                         audio_url = f"{SUPABASE_URL}/storage/v1/object/public/therapist-audio/{file_path}"
 
                     if audio_bytes or text_answer:
-                        supabase.table("therapist_answers").upsert({
+                        supabase.table("therapist_answers").upsert(
+                        {
                             "therapist_id": st.session_state["therapist_id"],
                             "question_id": q_id,
                             "answer_text": text_answer if text_answer else None,
                             "audio_url": audio_url
-                        }, on_conflict=["therapist_id", "question_id"]).execute()
-
-
+                        },
+                        on_conflict=["therapist_id", "question_id"]
+                    ).execute()
 
                 st.session_state["therapist_all_submitted"] = True
                 st.rerun()
