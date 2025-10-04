@@ -339,10 +339,9 @@ elif role == "Therapist":
                             "answer_text": text_answer if text_answer else None,
                             "audio_url": audio_url
                         },
-                    # Revert to the column list. This should now map 
-                    # to your single, correct UNIQUE constraint.
-                    on_conflict=["therapist_id", "question_id"] 
-                ).execute()
+                        # This must be the column list to match the composite unique index.
+                        on_conflict=["therapist_id", "question_id"]
+                    ).execute()
 
 
                 st.session_state["therapist_all_submitted"] = True
