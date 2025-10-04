@@ -333,6 +333,8 @@ elif role == "Therapist":
 
                     if audio_bytes or text_answer:
                         # app.py (Final attempt at fixing on_conflict)
+                        # app.py (Final Code State)
+
                         supabase.table("therapist_answers").upsert(
                         {
                             "therapist_id": st.session_state["therapist_id"],
@@ -340,9 +342,9 @@ elif role == "Therapist":
                             "answer_text": text_answer if text_answer else None,
                             "audio_url": audio_url
                         },
-                        # Revert to using the explicit constraint name:
-                        on_conflict="unique_therapist_question"
+                        on_conflict=["therapist_id", "question_id"]
                     ).execute()
+
 
 
                 st.session_state["therapist_all_submitted"] = True
