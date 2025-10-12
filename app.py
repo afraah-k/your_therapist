@@ -189,6 +189,26 @@ if role == "User / Client":
                     """,
                     unsafe_allow_html=True
                 )
+                # 💬 Feedback form link for users
+                st.markdown("---")
+                st.markdown(
+                    """
+                    <div style="text-align:center;">
+                        <h3 style="color:#2d046e;">📝 We'd love your feedback!</h3>
+                        <p style="font-size:16px; color:#555;">
+                            Help us make this platform even better.  
+                            Please take a minute to share your thoughts below 👇
+                        </p>
+                        <a href="https://forms.gle/de6JqeAo6mrM1iYv5" target="_blank"
+                        style="background-color:#8ec5fc; color:white; padding:10px 20px;
+                        border-radius:10px; text-decoration:none; font-weight:600;">
+                        💜 Give Feedback
+                        </a>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
 
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
@@ -352,6 +372,26 @@ elif role == "Therapist":
                             """,
                             unsafe_allow_html=True
                         )
+                            # 💬 Feedback form link for therapists
+                        st.markdown("---")
+                        st.markdown(
+                            """
+                            <div style="text-align:center;">
+                                <h3 style="color:#6a1b9a;">📝 We value your feedback!</h3>
+                                <p style="font-size:16px; color:#555;">
+                                    Your insights help us make the matching process smarter and more effective.  
+                                    Please take a minute to share your thoughts below 👇
+                                </p>
+                                <a href="https://forms.gle/5txFuYQ6Gn4b9GMj6" target="_blank"
+                                style="background-color:#fcb69f; color:white; padding:10px 20px;
+                                border-radius:10px; text-decoration:none; font-weight:600;">
+                                💜 Give Feedback
+                                </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
                     st.session_state["therapist_all_submitted"] = True
 
                 except Exception as e:
