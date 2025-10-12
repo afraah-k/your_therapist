@@ -48,6 +48,7 @@ def fetch_mcqs():
 
 # --- Save User Preferences ---
 def save_user_preferences(user_name, user_email, free_text_intro, free_text_end):
+    # ✅ Ensure the user is created or updated in users table
     response = supabase.table("users").upsert({
         "name": user_name,
         "email": user_email,
@@ -60,19 +61,20 @@ def save_user_preferences(user_name, user_email, free_text_intro, free_text_end)
         existing = supabase.table("users").select("id").eq("email", user_email).execute()
         user_id = existing.data[0]["id"]
 
+    # ✅ Merge intro and additional free text
     combined_free_text = ""
     if free_text_intro:
         combined_free_text += f"Intro: {free_text_intro}\n\n"
     if free_text_end:
         combined_free_text += f"Additional: {free_text_end}"
 
-    supabase.table("preferences").insert({
+    # ✅ Match preferences table column names exactly
+    supabase.table("preferences").upsert({
         "user_id": user_id,
         "free_text": combined_free_text
     }).execute()
 
     return user_id
-
 
 # --- Save MCQ answers ---
 def save_user_mcq_answers(user_id, answers_dict):
@@ -80,7 +82,7 @@ def save_user_mcq_answers(user_id, answers_dict):
         q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
         if q_lookup.data:
             question_id = q_lookup.data[0]["id"]
-            supabase.table("user_mcq_answers").insert({
+            supabase.table("answers").insert({
                 "user_id": user_id,
                 "question_id": question_id,
                 "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
@@ -128,7 +130,6 @@ if role == "User / Client":
             options = mcq["options"]
 
             with st.expander(f"Q{q_num}: {q_text}"):
-
                 # 🌟 Q28 → multiple sliders
                 if q_num == 28:
                     st.markdown("⭐ **Please rate how true each statement feels for you (1 = Not at all true, 5 = Completely true):**")
@@ -142,9 +143,7 @@ if role == "User / Client":
                     answers[q_num] = {}
                     for i, statement in enumerate(options, start=1):
                         answers[q_num][statement] = st.slider(
-                            f"{statement}",
-                            1, 5, 3,
-                            key=f"q{q_num}_slider_{i}"
+                            f"{statement}", 1, 5, 3, key=f"q{q_num}_slider_{i}"
                         )
 
                 elif options:
@@ -174,7 +173,6 @@ if role == "User / Client":
         # 🎬 Animation after user submits
         if st.session_state.get("user_submitted", False):
             st.success("✅ Your preferences have been saved!")
-
             _, col2, _ = st.columns([1, 2, 1])
             with col2:
                 lottie_json = load_lottiefile("animations/mental_wellbeing.json")
@@ -231,20 +229,34 @@ elif role == "Therapist":
 
                 language_list = [lang.strip() for lang in languages.split(",") if lang.strip()] if isinstance(languages, str) else []
 
-                insert_data = {
+                # ✅ Insert therapist info into therapist_profiles
+                response = supabase.table("users").upsert({
                     "name": name,
                     "email": email,
+                    "role": "therapist"
+                }).execute()
+
+                if response.data:
+                    user_id = response.data[0]["id"]
+                else:
+                    existing = supabase.table("users").select("id").eq("email", email).execute()
+                    user_id = existing.data[0]["id"]
+
+                insert_data = {
+                    "user_id": user_id,
                     "gender": gender,
                     "age": int(age) if age else None,
                     "religious_belief": religious_belief,
                     "practice_location": practice_location,
                     "languages": language_list,
                     "session_modes": session_modes,
-                    "charge": charge_value
+                    "charge": charge_value,
+                    "email": email,
+                    "name": name
                 }
 
                 try:
-                    response = supabase.table("therapist_profiles").insert(insert_data).execute()
+                    response = supabase.table("therapist_profiles").upsert(insert_data).execute()
                     therapist_id = response.data[0]["id"]
                     st.session_state["therapist_id"] = therapist_id
                     st.success("✅ Basic information saved successfully!")
@@ -340,3 +352,4 @@ elif role == "Therapist":
 
                 except Exception as e:
                     st.error(f"⚠️ Error saving your responses: {e}")
+
