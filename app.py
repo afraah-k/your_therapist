@@ -50,7 +50,8 @@ def fetch_mcqs():
 def save_user_preferences(user_name, user_email, free_text_intro, free_text_end):
     response = supabase.table("users").insert({
         "name": user_name,
-        "email": user_email
+        "email": user_email,
+        "role": "user"
     }).execute()
 
     if response.data:
