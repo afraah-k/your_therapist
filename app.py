@@ -236,3 +236,61 @@ elif role == "Therapist":
                     except Exception as e:
                         st.error(f"⚠️ Database insert failed: {e}")
 
+# --- Step 2: Therapist MCQs ---
+if "therapist_id" in st.session_state:
+    st.subheader("🧾 Step 2: MCQs")
+    st.info("💜 These questions help us understand your therapeutic style and approach to match with the right users. Please answer honestly — it would only take about 5 minutes.")
+
+    def fetch_therapist_mcqs():
+        response = supabase.table("questions").select(
+            "id, question_number, question_text, options"
+        ).eq("target", "therapist").order("question_number").execute()
+        return response.data
+
+    mcqs = fetch_therapist_mcqs()
+    answers = {}
+
+    with st.form("therapist_mcq_form"):
+        for mcq in mcqs:
+            q_num = mcq["question_number"]
+            q_text = mcq["question_text"]
+            options = mcq.get("options")
+
+            with st.expander(f"Q{q_num}: {q_text}", expanded=False):
+                if options:
+                    if isinstance(options, str):
+                        try:
+                            options = json.loads(options)
+                        except:
+                            options = [options]
+                    if "select all" in q_text.lower() or "multiple" in q_text.lower():
+                        answers[q_num] = st.multiselect("Select all that apply:", options, key=f"tq{q_num}")
+                    else:
+                        answers[q_num] = st.radio("Choose one:", options, key=f"tq{q_num}", index=None)
+                else:
+                    answers[q_num] = st.text_area("Your answer:", key=f"tq{q_num}_text")
+
+        submitted = st.form_submit_button("🚀 Submit My Answers")
+
+        if submitted:
+            if not answers:
+                st.warning("⚠️ Please answer at least one question.")
+            else:
+                try:
+                    for q_num, ans in answers.items():
+                        q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
+                        if q_lookup.data:
+                            question_id = q_lookup.data[0]["id"]
+                            supabase.table("answers").insert({
+                                "user_id": st.session_state["therapist_id"],
+                                "question_id": question_id,
+                                "answer": json.dumps(ans) if isinstance(ans, list) else str(ans)
+                            }).execute()
+
+                    st.success("✅ All your MCQ answers have been submitted!")
+                    st.session_state["therapist_all_submitted"] = True
+                    st.balloons()
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"⚠️ Error saving your responses: {e}")
