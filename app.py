@@ -258,7 +258,7 @@ elif role == "Therapist":
                 try:
                     response = supabase.table("therapist_profiles").upsert(insert_data).execute()
                     therapist_id = response.data[0]["id"]
-                    st.session_state["therapist_id"] = therapist_id
+                    st.session_state["therapist_id"] = user_id
                     st.success("✅ Basic information saved successfully!")
                 except Exception as e:
                     st.error(f"⚠️ Database insert failed: {e}")
@@ -325,7 +325,7 @@ elif role == "Therapist":
                         if q_lookup.data:
                             question_id = q_lookup.data[0]["id"]
                             supabase.table("answers").insert({
-                                "user_id": st.session_state["therapist_id"],
+                                "user_id": st.session_state["therapist_user_id"],
                                 "question_id": question_id,
                                 "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
                             }).execute()
