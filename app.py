@@ -126,7 +126,13 @@ if role == "User / Client":
             options = mcq["options"]
 
             with st.expander(f"Q{q_num}: {q_text}"):
-                if options:
+
+                # 🌟 Q28 → Slider (1–5)
+                if q_num == 28:
+                    st.markdown("⭐ **Please rate how true this statement feels for you (1 = Not at all true, 5 = Completely true):**")
+                    answers[q_num] = st.slider("Your Rating", 1, 5, 3, key=f"q{q_num}_slider")
+
+                elif options:
                     if isinstance(options, str):
                         try:
                             options = json.loads(options)
@@ -171,6 +177,7 @@ if role == "User / Client":
                     """,
                     unsafe_allow_html=True
                 )
+
 
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
@@ -238,8 +245,8 @@ elif role == "Therapist":
 
 # --- Step 2: Therapist MCQs ---
 if "therapist_id" in st.session_state:
-    st.subheader("🧾 Step 2: MCQs")
-    st.info("💜 These questions help us understand your therapeutic style and approach to match with the right users. Please answer honestly — it would only take about 5 minutes.")
+    st.subheader("🧾 Step 2: Answer Therapist MCQs")
+    st.info("💜 These questions help us understand your therapeutic style and approach. Please answer honestly — it takes about 5 minutes.")
 
     def fetch_therapist_mcqs():
         response = supabase.table("questions").select(
@@ -253,44 +260,64 @@ if "therapist_id" in st.session_state:
     with st.form("therapist_mcq_form"):
         for mcq in mcqs:
             q_num = mcq["question_number"]
+            q_display = q_num - 100  # Show 1 instead of 101
             q_text = mcq["question_text"]
             options = mcq.get("options")
 
-            with st.expander(f"Q{q_num}: {q_text}", expanded=False):
-                if options:
+            with st.expander(f"Q{q_display}: {q_text}", expanded=False):
+
+                # Q101 (In which areas do you specialize?) → Text box
+                if q_num == 101:
+                    answers[q_num] = st.text_area("Your areas of specialization:", key=f"tq{q_num}_text")
+
+                # Q108 or Q116 → Slider 1–5
+                elif q_num in [108, 116]:
+                    st.write("Rate from 1 (Not at all) to 5 (Very much):")
+                    answers[q_num] = st.slider("Your Rating", 1, 5, 3, key=f"tq{q_num}_slider")
+
+                # Q119 (optional text box)
+                elif q_num == 119:
+                    answers[q_num] = st.text_area("(Optional) Your thoughts:", key=f"tq{q_num}_optional")
+
+                # Normal questions
+                elif options:
                     if isinstance(options, str):
                         try:
                             options = json.loads(options)
                         except:
                             options = [options]
+
                     if "select all" in q_text.lower() or "multiple" in q_text.lower():
                         answers[q_num] = st.multiselect("Select all that apply:", options, key=f"tq{q_num}")
                     else:
                         answers[q_num] = st.radio("Choose one:", options, key=f"tq{q_num}", index=None)
+
                 else:
                     answers[q_num] = st.text_area("Your answer:", key=f"tq{q_num}_text")
 
         submitted = st.form_submit_button("🚀 Submit My Answers")
 
         if submitted:
-            if not answers:
-                st.warning("⚠️ Please answer at least one question.")
-            else:
-                try:
-                    for q_num, ans in answers.items():
-                        q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
-                        if q_lookup.data:
-                            question_id = q_lookup.data[0]["id"]
-                            supabase.table("answers").insert({
-                                "user_id": st.session_state["therapist_id"],
-                                "question_id": question_id,
-                                "answer": json.dumps(ans) if isinstance(ans, list) else str(ans)
-                            }).execute()
+            try:
+                for q_num, ans in answers.items():
+                    # Skip empty optional Q119
+                    if q_num == 119 and (not ans or str(ans).strip() == ""):
+                        continue
 
-                    st.success("✅ All your MCQ answers have been submitted!")
-                    st.session_state["therapist_all_submitted"] = True
-                    st.balloons()
-                    st.rerun()
+                    q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
+                    if q_lookup.data:
+                        question_id = q_lookup.data[0]["id"]
+                        supabase.table("answers").insert({
+                            "user_id": st.session_state["therapist_id"],
+                            "question_id": question_id,
+                            "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
+                        }).execute()
 
-                except Exception as e:
-                    st.error(f"⚠️ Error saving your responses: {e}")
+                st.success("✅ All your MCQ answers have been submitted!")
+                st.session_state["therapist_all_submitted"] = True
+                st.balloons()
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"⚠️ Error saving your responses: {e}")
+
