@@ -68,7 +68,7 @@ def save_user_preferences(user_name, user_email, free_text_intro, free_text_end)
 
     supabase.table("preferences").insert({
         "user_id": user_id,
-        "free_text_preference": combined_free_text
+        "free_text": combined_free_text
     }).execute()
 
     return user_id
