@@ -202,7 +202,7 @@ elif role == "Therapist":
                     "languages": [lang.strip() for lang in languages.split(",")],
                     "session_modes": session_modes,
                     "charge": charge
-                }, on_conflict="email").execute()
+                }).execute()
 
                 therapist_id = response.data[0]["id"]
                 st.session_state["therapist_id"] = therapist_id
