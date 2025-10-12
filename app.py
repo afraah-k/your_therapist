@@ -48,7 +48,7 @@ def fetch_mcqs():
 
 # --- Save User Preferences ---
 def save_user_preferences(user_name, user_email, free_text_intro, free_text_end):
-    response = supabase.table("users").insert({
+    response = supabase.table("users").upsert({
         "name": user_name,
         "email": user_email,
         "role": "user"
@@ -66,12 +66,13 @@ def save_user_preferences(user_name, user_email, free_text_intro, free_text_end)
     if free_text_end:
         combined_free_text += f"Additional: {free_text_end}"
 
-    supabase.table("user_preferences").insert({
+    supabase.table("preferences").insert({
         "user_id": user_id,
         "free_text_preference": combined_free_text
     }).execute()
 
     return user_id
+
 
 # --- Save MCQ answers ---
 def save_user_mcq_answers(user_id, answers_dict):
