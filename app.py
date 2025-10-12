@@ -352,7 +352,6 @@ elif role == "Therapist":
                             """,
                             unsafe_allow_html=True
                         )
-                    st.balloons()
                     st.session_state["therapist_all_submitted"] = True
 
                 except Exception as e:
