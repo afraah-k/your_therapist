@@ -174,96 +174,65 @@ if role == "User / Client":
 
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
-    st.subheader("📋 Step 1: Basic Information")
-    with st.form("therapist_info_form"):
-        name = st.text_input("Name")
-        email = st.text_input("Email (unique identifier)")
-        gender = st.radio("Gender", ["Male", "Female", "Other"])
-        age = st.number_input("Age", min_value=18, max_value=100, step=1)
-        religious_belief = st.text_input("Religious Belief")
-        practice_location = st.text_input("Practice Location")
-        languages = st.text_area("Languages Known (comma-separated)")
-        session_modes = st.multiselect("Modes of Session", ["In-person", "Video", "Phone", "Hybrid"])
-        charge = st.text_input("💵 How much do you charge per session?")
+        st.subheader("📋 Step 1: Basic Information")
+        with st.form("therapist_info_form"):
+            name = st.text_input("Name")
+            email = st.text_input("Email (unique identifier)")
+            gender = st.radio("Gender", ["Male", "Female", "Other"])
+            age = st.number_input("Age", min_value=18, max_value=100, step=1)
+            religious_belief = st.text_input("Religious Belief")
+            practice_location = st.text_input("Practice Location")
+            languages = st.text_area("Languages Known (comma-separated)")
+            session_modes = st.multiselect("Modes of Session", ["In-person", "Video", "Phone", "Hybrid"])
+            charge = st.text_input("💵 How much do you charge per session?")
 
-        submitted_info = st.form_submit_button("💾 Save Info")
+            submitted_info = st.form_submit_button("💾 Save Info")
 
-        if submitted_info:
-            if not (name and email and gender and religious_belief and practice_location and languages and session_modes and charge):
-                st.error("⚠️ Please fill in all fields before proceeding.")
-            else:
-                response = supabase.table("therapists").upsert({
-                    "name": name,
-                    "email": email,
-                    "gender": gender,
-                    "age": age,
-                    "religious_belief": religious_belief,
-                    "practice_location": practice_location,
-                    "languages": [lang.strip() for lang in languages.split(",")],
-                    "session_modes": session_modes,
-                    "charge": charge
-                }).execute()
-
-                therapist_id = response.data[0]["id"]
-                st.session_state["therapist_id"] = therapist_id
-                st.success("✅ Basic information saved!")
-
-    # --- Step 2: Therapist MCQs ---
-    if "therapist_id" in st.session_state:
-        st.subheader("🧾 Step 2: Answer Therapist MCQs")
-        st.info("💜 These questions help us understand your therapeutic style and approach. Please answer honestly — it takes about 5 minutes.")
-
-        def fetch_therapist_mcqs():
-            response = supabase.table("questions").select(
-                "id, question_number, question_text, options"
-            ).eq("target", "therapist").order("question_number").execute()
-            return response.data
-
-        mcqs = fetch_therapist_mcqs()
-        answers = {}
-
-        with st.form("therapist_mcq_form"):
-            for mcq in mcqs:
-                q_num = mcq["question_number"]
-                q_text = mcq["question_text"]
-                options = mcq.get("options")
-
-                with st.expander(f"Q{q_num}: {q_text}", expanded=False):
-                    if options:
-                        if isinstance(options, str):
-                            try:
-                                options = json.loads(options)
-                            except:
-                                options = [options]
-
-                        if "select all" in q_text.lower() or "multiple" in q_text.lower():
-                            answers[q_num] = st.multiselect("Select all that apply:", options, key=f"tq{q_num}")
-                        else:
-                            answers[q_num] = st.radio("Choose one:", options, key=f"tq{q_num}", index=None)
-                    else:
-                        answers[q_num] = st.text_area("Your answer:", key=f"tq{q_num}_text")
-
-            submitted = st.form_submit_button("🚀 Submit My Answers")
-
-            if submitted:
-                if not answers:
-                    st.warning("⚠️ Please answer at least one question.")
+            if submitted_info:
+                if not (name and email and gender and religious_belief and practice_location and charge):
+                    st.error("⚠️ Please fill in all required fields before proceeding.")
                 else:
-                    try:
-                        for q_num, ans in answers.items():
-                            q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
-                            if q_lookup.data:
-                                question_id = q_lookup.data[0]["id"]
-                                supabase.table("answers").insert({
-                                    "user_id": st.session_state["therapist_id"],
-                                    "question_id": question_id,
-                                    "answer": json.dumps(ans) if isinstance(ans, list) else str(ans)
-                                }).execute()
+                    import json
 
-                        st.success("✅ All your MCQ answers have been submitted!")
-                        st.session_state["therapist_all_submitted"] = True
-                        st.balloons()
-                        st.rerun()
+                    # --- Clean and validate inputs ---
+                    # Charge should be integer (convert safely)
+                    try:
+                        charge_value = int(charge)
+                    except ValueError:
+                        charge_value = None
+
+                    # Convert languages safely (split if string, remove blanks)
+                    if isinstance(languages, str):
+                        language_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
+                    else:
+                        language_list = []
+
+                    # Make sure session_modes is JSON serializable
+                    session_modes_json = json.loads(json.dumps(session_modes))
+                    language_list_json = json.loads(json.dumps(language_list))
+
+                    insert_data = {
+                        "name": name,
+                        "email": email,
+                        "gender": gender,
+                        "age": int(age) if age else None,
+                        "religious_belief": religious_belief,
+                        "practice_location": practice_location,
+                        "languages": language_list_json,       # ✅ Proper JSON array
+                        "session_modes": session_modes_json,   # ✅ Proper JSON array
+                        "charge": charge_value                 # ✅ Integer or None
+                    }
+
+                    st.write("🧾 Data being inserted:", insert_data)  # Debug view (remove later if not needed)
+
+                    try:
+                        # --- Insert into your therapist_profiles table ---
+                        response = supabase.table("therapist_profiles").insert(insert_data).execute()
+
+                        therapist_id = response.data[0]["id"]
+                        st.session_state["therapist_id"] = therapist_id
+                        st.success("✅ Basic information saved successfully!")
 
                     except Exception as e:
-                        st.error(f"⚠️ Error saving your responses: {e}")
+                        st.error(f"⚠️ Database insert failed: {e}")
+
