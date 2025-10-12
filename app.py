@@ -229,41 +229,44 @@ elif role == "Therapist":
 
                 language_list = [lang.strip() for lang in languages.split(",") if lang.strip()] if isinstance(languages, str) else []
 
-                # ✅ Insert therapist info into therapist_profiles
-                response = supabase.table("users").upsert({
+                # ✅ Step 1: Ensure therapist also exists in `users` table
+                user_response = supabase.table("users").upsert({
                     "name": name,
                     "email": email,
                     "role": "therapist"
                 }).execute()
 
-                if response.data:
-                    user_id = response.data[0]["id"]
+                if user_response.data:
+                    user_id = user_response.data[0]["id"]
                 else:
                     existing = supabase.table("users").select("id").eq("email", email).execute()
                     user_id = existing.data[0]["id"]
 
+                # ✅ Store this user_id for later use in answers
+                st.session_state["therapist_user_id"] = user_id
+
+                # ✅ Step 2: Insert into `therapist_profiles` linked to user_id
                 insert_data = {
                     "user_id": user_id,
+                    "name": name,
+                    "email": email,
                     "gender": gender,
                     "age": int(age) if age else None,
                     "religious_belief": religious_belief,
                     "practice_location": practice_location,
                     "languages": language_list,
                     "session_modes": session_modes,
-                    "charge": charge_value,
-                    "email": email,
-                    "name": name
+                    "charge": charge_value
                 }
 
                 try:
-                    response = supabase.table("therapist_profiles").upsert(insert_data).execute()
-                    therapist_id = response.data[0]["id"]
-                    st.session_state["therapist_id"] = user_id
+                    supabase.table("therapist_profiles").upsert(insert_data).execute()
                     st.success("✅ Basic information saved successfully!")
                 except Exception as e:
                     st.error(f"⚠️ Database insert failed: {e}")
 
-    if "therapist_id" in st.session_state:
+    # ✅ Step 2: Therapist MCQs (only if Step 1 completed)
+    if "therapist_user_id" in st.session_state:
         st.subheader("🧾 Step 2: Answer Therapist MCQs")
         st.info("💜 Please answer these questions honestly — it takes about 5 minutes.")
 
@@ -279,7 +282,7 @@ elif role == "Therapist":
         with st.form("therapist_mcq_form"):
             for mcq in mcqs:
                 q_num = mcq["question_number"]
-                q_display = q_num - 100
+                q_display = q_num - 100  # show question numbers starting from 1
                 q_text = mcq["question_text"]
                 options = mcq.get("options")
 
@@ -321,11 +324,13 @@ elif role == "Therapist":
                     for q_num, ans in answers.items():
                         if q_num == 119 and (not ans or str(ans).strip() == ""):
                             continue
+
                         q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
                         if q_lookup.data:
                             question_id = q_lookup.data[0]["id"]
+
                             supabase.table("answers").insert({
-                                "user_id": st.session_state["therapist_user_id"],
+                                "user_id": st.session_state["therapist_user_id"],  # ✅ now defined properly
                                 "question_id": question_id,
                                 "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
                             }).execute()
@@ -352,4 +357,5 @@ elif role == "Therapist":
 
                 except Exception as e:
                     st.error(f"⚠️ Error saving your responses: {e}")
+
 
