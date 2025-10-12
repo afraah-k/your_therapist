@@ -344,10 +344,10 @@ elif role == "Therapist":
                         st.markdown(
                             """
                             <div style="text-align:center; margin-top:-10px;">
-                                <h3 style="color:#6a1b9a;">🎉 You’ve successfully completed your interview!</h3>
-                                <p style="font-size:18px; color:#555;">
+                                <h2 style="color:#6a1b9a;">🎉 You’ve successfully completed your interview!</h2>
+                                <h3 style="font-size:18px; color:#555;">
                                     Congratulations for taking a step towards making therapy easy and accessible. 🌱  
-                                </p>
+                                </h3>
                             </div>
                             """,
                             unsafe_allow_html=True
