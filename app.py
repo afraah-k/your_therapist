@@ -81,7 +81,7 @@ def save_user_mcq_answers(user_id, answers_dict):
             supabase.table("user_mcq_answers").insert({
                 "user_id": user_id,
                 "question_id": question_id,
-                "answer": str(ans)
+                "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
             }).execute()
 
 # ------------------- UI -------------------
@@ -127,10 +127,23 @@ if role == "User / Client":
 
             with st.expander(f"Q{q_num}: {q_text}"):
 
-                # 🌟 Q28 → Slider (1–5)
+                # 🌟 Q28 → multiple sliders
                 if q_num == 28:
-                    st.markdown("⭐ **Please rate how true this statement feels for you (1 = Not at all true, 5 = Completely true):**")
-                    answers[q_num] = st.slider("Your Rating", 1, 5, 3, key=f"q{q_num}_slider")
+                    st.markdown("⭐ **Please rate how true each statement feels for you (1 = Not at all true, 5 = Completely true):**")
+
+                    if isinstance(options, str):
+                        try:
+                            options = json.loads(options)
+                        except:
+                            options = [options]
+
+                    answers[q_num] = {}
+                    for i, statement in enumerate(options, start=1):
+                        answers[q_num][statement] = st.slider(
+                            f"{statement}",
+                            1, 5, 3,
+                            key=f"q{q_num}_slider_{i}"
+                        )
 
                 elif options:
                     if isinstance(options, str):
@@ -138,8 +151,6 @@ if role == "User / Client":
                             options = json.loads(options)
                         except:
                             options = [options]
-
-                    # Multiselects
                     if q_num in [1, 12, 18]:
                         answers[q_num] = st.multiselect("Select all that apply:", options, key=f"q{q_num}")
                     else:
@@ -158,13 +169,14 @@ if role == "User / Client":
                 save_user_mcq_answers(user_id, answers)
                 st.session_state["user_submitted"] = True
 
+        # 🎬 Animation after user submits
         if st.session_state.get("user_submitted", False):
             st.success("✅ Your preferences have been saved!")
 
             _, col2, _ = st.columns([1, 2, 1])
             with col2:
                 lottie_json = load_lottiefile("animations/mental_wellbeing.json")
-                st_lottie(lottie_json, height=250, key="mental_wellbeing")
+                st_lottie(lottie_json, height=250, key="user_success")
                 st.markdown(
                     """
                     <div style="text-align:center; margin-top:-10px;">
@@ -178,146 +190,151 @@ if role == "User / Client":
                     unsafe_allow_html=True
                 )
 
-
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
-        st.subheader("📋 Step 1: Basic Information")
-        with st.form("therapist_info_form"):
-            name = st.text_input("Name")
-            email = st.text_input("Email (unique identifier)")
-            gender = st.radio("Gender", ["Male", "Female", "Other"])
-            age = st.number_input("Age", min_value=18, max_value=100, step=1)
-            religious_belief = st.text_input("Religious Belief")
-            practice_location = st.text_input("Practice Location")
-            languages = st.text_area("Languages Known (comma-separated)")
-            session_modes = st.multiselect("Modes of Session", ["In-person", "Video", "Phone", "Hybrid"])
-            charge = st.text_input("💵 How much do you charge per session?")
+    st.markdown(
+        """
+        <div style="background: linear-gradient(135deg, #ffecd2, #fcb69f);
+        padding:25px; border-radius:15px; text-align:center; margin-bottom:20px;">
+        <h2 style="color:#6a1b9a;">🎙️ Therapist Portal</h2>
+        <p>Step 1: Provide your basic information.  
+        Step 2: Answer your professional MCQs 💭</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-            submitted_info = st.form_submit_button("💾 Save Info")
+    st.subheader("📋 Step 1: Basic Information")
+    with st.form("therapist_info_form"):
+        name = st.text_input("Name")
+        email = st.text_input("Email (unique identifier)")
+        gender = st.radio("Gender", ["Male", "Female", "Other"])
+        age = st.number_input("Age", min_value=18, max_value=100, step=1)
+        religious_belief = st.text_input("Religious Belief")
+        practice_location = st.text_input("Practice Location")
+        languages = st.text_area("Languages Known (comma-separated)")
+        session_modes = st.multiselect("Modes of Session", ["In-person", "Video", "Phone", "Hybrid"])
+        charge = st.text_input("💵 How much do you charge per session?")
 
-            if submitted_info:
-                if not (name and email and gender and religious_belief and practice_location and charge):
-                    st.error("⚠️ Please fill in all required fields before proceeding.")
-                else:
-                    import json
+        submitted_info = st.form_submit_button("💾 Save Info")
 
-                    # --- Clean and validate inputs ---
-                    # Charge should be integer (convert safely)
-                    try:
-                        charge_value = int(charge)
-                    except ValueError:
-                        charge_value = None
+        if submitted_info:
+            if not (name and email and gender and religious_belief and practice_location and charge):
+                st.error("⚠️ Please fill in all required fields before proceeding.")
+            else:
+                try:
+                    charge_value = int(charge)
+                except ValueError:
+                    charge_value = None
 
-                    # Convert languages safely (split if string, remove blanks)
-                    if isinstance(languages, str):
-                        language_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
+                language_list = [lang.strip() for lang in languages.split(",") if lang.strip()] if isinstance(languages, str) else []
+
+                insert_data = {
+                    "name": name,
+                    "email": email,
+                    "gender": gender,
+                    "age": int(age) if age else None,
+                    "religious_belief": religious_belief,
+                    "practice_location": practice_location,
+                    "languages": language_list,
+                    "session_modes": session_modes,
+                    "charge": charge_value
+                }
+
+                try:
+                    response = supabase.table("therapist_profiles").insert(insert_data).execute()
+                    therapist_id = response.data[0]["id"]
+                    st.session_state["therapist_id"] = therapist_id
+                    st.success("✅ Basic information saved successfully!")
+                except Exception as e:
+                    st.error(f"⚠️ Database insert failed: {e}")
+
+    if "therapist_id" in st.session_state:
+        st.subheader("🧾 Step 2: Answer Therapist MCQs")
+        st.info("💜 Please answer these questions honestly — it takes about 5 minutes.")
+
+        def fetch_therapist_mcqs():
+            response = supabase.table("questions").select(
+                "id, question_number, question_text, options"
+            ).eq("target", "therapist").order("question_number").execute()
+            return response.data
+
+        mcqs = fetch_therapist_mcqs()
+        answers = {}
+
+        with st.form("therapist_mcq_form"):
+            for mcq in mcqs:
+                q_num = mcq["question_number"]
+                q_display = q_num - 100
+                q_text = mcq["question_text"]
+                options = mcq.get("options")
+
+                with st.expander(f"Q{q_display}: {q_text}", expanded=False):
+                    if q_num == 101:
+                        answers[q_num] = st.text_area("Your areas of specialization:", key=f"tq{q_num}_text")
+
+                    elif q_num in [108, 116]:
+                        st.markdown("⭐ **Please rate how true each statement feels for you (1 = Not at all, 5 = Very much):**")
+                        if isinstance(options, str):
+                            try:
+                                options = json.loads(options)
+                            except:
+                                options = [options]
+                        answers[q_num] = {}
+                        for i, statement in enumerate(options, start=1):
+                            answers[q_num][statement] = st.slider(f"{statement}", 1, 5, 3, key=f"tq{q_num}_slider_{i}")
+
+                    elif q_num == 119:
+                        answers[q_num] = st.text_area("(Optional) Your thoughts:", key=f"tq{q_num}_optional")
+
+                    elif options:
+                        if isinstance(options, str):
+                            try:
+                                options = json.loads(options)
+                            except:
+                                options = [options]
+                        if "select all" in q_text.lower() or "multiple" in q_text.lower():
+                            answers[q_num] = st.multiselect("Select all that apply:", options, key=f"tq{q_num}")
+                        else:
+                            answers[q_num] = st.radio("Choose one:", options, key=f"tq{q_num}", index=None)
                     else:
-                        language_list = []
+                        answers[q_num] = st.text_area("Your answer:", key=f"tq{q_num}_text")
 
-                    # Make sure session_modes is JSON serializable
-                    session_modes_json = json.loads(json.dumps(session_modes))
-                    language_list_json = json.loads(json.dumps(language_list))
+            submitted = st.form_submit_button("🚀 Submit My Answers")
 
-                    insert_data = {
-                        "name": name,
-                        "email": email,
-                        "gender": gender,
-                        "age": int(age) if age else None,
-                        "religious_belief": religious_belief,
-                        "practice_location": practice_location,
-                        "languages": language_list_json,       # ✅ Proper JSON array
-                        "session_modes": session_modes_json,   # ✅ Proper JSON array
-                        "charge": charge_value                 # ✅ Integer or None
-                    }
+            if submitted:
+                try:
+                    for q_num, ans in answers.items():
+                        if q_num == 119 and (not ans or str(ans).strip() == ""):
+                            continue
+                        q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
+                        if q_lookup.data:
+                            question_id = q_lookup.data[0]["id"]
+                            supabase.table("answers").insert({
+                                "user_id": st.session_state["therapist_id"],
+                                "question_id": question_id,
+                                "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
+                            }).execute()
 
-                    st.write("🧾 Data being inserted:", insert_data)  # Debug view (remove later if not needed)
+                    # 🎬 Therapist success animation
+                    st.success("✅ All your MCQ answers have been submitted successfully!")
+                    _, col2, _ = st.columns([1, 2, 1])
+                    with col2:
+                        confetti_json = load_lottiefile("animations/success_confetti.json")
+                        st_lottie(confetti_json, height=250, key="therapist_confetti")
+                        st.markdown(
+                            """
+                            <div style="text-align:center; margin-top:-10px;">
+                                <h3 style="color:#6a1b9a;">🎉 You’ve successfully completed your interview!</h3>
+                                <p style="font-size:18px; color:#555;">
+                                    Congratulations for taking a step towards making therapy easy and accessible. 🌱  
+                                </p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                    st.balloons()
+                    st.session_state["therapist_all_submitted"] = True
 
-                    try:
-                        # --- Insert into your therapist_profiles table ---
-                        response = supabase.table("therapist_profiles").insert(insert_data).execute()
-
-                        therapist_id = response.data[0]["id"]
-                        st.session_state["therapist_id"] = therapist_id
-                        st.success("✅ Basic information saved successfully!")
-
-                    except Exception as e:
-                        st.error(f"⚠️ Database insert failed: {e}")
-
-# --- Step 2: Therapist MCQs ---
-if "therapist_id" in st.session_state:
-    st.subheader("🧾 Step 2: Answer Therapist MCQs")
-    st.info("💜 These questions help us understand your therapeutic style and approach. Please answer honestly — it takes about 5 minutes.")
-
-    def fetch_therapist_mcqs():
-        response = supabase.table("questions").select(
-            "id, question_number, question_text, options"
-        ).eq("target", "therapist").order("question_number").execute()
-        return response.data
-
-    mcqs = fetch_therapist_mcqs()
-    answers = {}
-
-    with st.form("therapist_mcq_form"):
-        for mcq in mcqs:
-            q_num = mcq["question_number"]
-            q_display = q_num - 100  # Show 1 instead of 101
-            q_text = mcq["question_text"]
-            options = mcq.get("options")
-
-            with st.expander(f"Q{q_display}: {q_text}", expanded=False):
-
-                # Q101 (In which areas do you specialize?) → Text box
-                if q_num == 101:
-                    answers[q_num] = st.text_area("Your areas of specialization:", key=f"tq{q_num}_text")
-
-                # Q108 or Q116 → Slider 1–5
-                elif q_num in [108, 116]:
-                    st.write("Rate from 1 (Not at all) to 5 (Very much):")
-                    answers[q_num] = st.slider("Your Rating", 1, 5, 3, key=f"tq{q_num}_slider")
-
-                # Q119 (optional text box)
-                elif q_num == 119:
-                    answers[q_num] = st.text_area("(Optional) Your thoughts:", key=f"tq{q_num}_optional")
-
-                # Normal questions
-                elif options:
-                    if isinstance(options, str):
-                        try:
-                            options = json.loads(options)
-                        except:
-                            options = [options]
-
-                    if "select all" in q_text.lower() or "multiple" in q_text.lower():
-                        answers[q_num] = st.multiselect("Select all that apply:", options, key=f"tq{q_num}")
-                    else:
-                        answers[q_num] = st.radio("Choose one:", options, key=f"tq{q_num}", index=None)
-
-                else:
-                    answers[q_num] = st.text_area("Your answer:", key=f"tq{q_num}_text")
-
-        submitted = st.form_submit_button("🚀 Submit My Answers")
-
-        if submitted:
-            try:
-                for q_num, ans in answers.items():
-                    # Skip empty optional Q119
-                    if q_num == 119 and (not ans or str(ans).strip() == ""):
-                        continue
-
-                    q_lookup = supabase.table("questions").select("id").eq("question_number", q_num).execute()
-                    if q_lookup.data:
-                        question_id = q_lookup.data[0]["id"]
-                        supabase.table("answers").insert({
-                            "user_id": st.session_state["therapist_id"],
-                            "question_id": question_id,
-                            "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
-                        }).execute()
-
-                st.success("✅ All your MCQ answers have been submitted!")
-                st.session_state["therapist_all_submitted"] = True
-                st.balloons()
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"⚠️ Error saving your responses: {e}")
-
+                except Exception as e:
+                    st.error(f"⚠️ Error saving your responses: {e}")
