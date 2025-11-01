@@ -6,6 +6,8 @@ from supabase import create_client, Client
 import warnings
 from streamlit_lottie import st_lottie
 import requests
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 # --- Suppress warnings ---
 warnings.filterwarnings("ignore", category=UserWarning, module="ctranslate2")
@@ -48,7 +50,6 @@ def fetch_mcqs():
 
 # --- Save User Preferences ---
 def save_user_preferences(user_name, user_email, free_text_intro, free_text_end):
-    # ✅ Ensure the user is created or updated in users table
     response = supabase.table("users").upsert({
         "name": user_name,
         "email": user_email,
@@ -61,14 +62,12 @@ def save_user_preferences(user_name, user_email, free_text_intro, free_text_end)
         existing = supabase.table("users").select("id").eq("email", user_email).execute()
         user_id = existing.data[0]["id"]
 
-    # ✅ Merge intro and additional free text
     combined_free_text = ""
     if free_text_intro:
         combined_free_text += f"Intro: {free_text_intro}\n\n"
     if free_text_end:
         combined_free_text += f"Additional: {free_text_end}"
 
-    # ✅ Match preferences table column names exactly
     supabase.table("preferences").upsert({
         "user_id": user_id,
         "free_text": combined_free_text
@@ -87,6 +86,41 @@ def save_user_mcq_answers(user_id, answers_dict):
                 "question_id": question_id,
                 "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
             }).execute()
+
+# --- Match user with therapists using cosine similarity ---
+def match_user_with_therapists(user_id):
+    user_answers = supabase.table("answers").select("question_id, answer").eq("user_id", user_id).execute().data
+    if not user_answers:
+        return []
+
+    therapist_answers = supabase.table("answers").select("user_id, question_id, answer").execute().data
+    if not therapist_answers:
+        return []
+
+    question_ids = sorted({ans["question_id"] for ans in user_answers + therapist_answers})
+    therapist_ids = sorted({ans["user_id"] for ans in therapist_answers})
+
+    # Create vector for user
+    user_vector = []
+    for q_id in question_ids:
+        ans = next((a["answer"] for a in user_answers if a["question_id"] == q_id), None)
+        user_vector.append(float(ans) if ans and str(ans).replace('.', '', 1).isdigit() else 0.0)
+    user_vector = np.array(user_vector).reshape(1, -1)
+
+    # Compute similarity
+    similarities = []
+    for t_id in therapist_ids:
+        t_answers = [a for a in therapist_answers if a["user_id"] == t_id]
+        therapist_vector = []
+        for q_id in question_ids:
+            ans = next((a["answer"] for a in t_answers if a["question_id"] == q_id), None)
+            therapist_vector.append(float(ans) if ans and str(ans).replace('.', '', 1).isdigit() else 0.0)
+        therapist_vector = np.array(therapist_vector).reshape(1, -1)
+        sim_score = cosine_similarity(user_vector, therapist_vector)[0][0]
+        similarities.append((t_id, sim_score))
+
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    return similarities[:3]  # top 3 matches
 
 # ------------------- UI -------------------
 st.title("(❁´◡`❁) Welcome to Your Therapist")
@@ -130,16 +164,13 @@ if role == "User / Client":
             options = mcq["options"]
 
             with st.expander(f"Q{q_num}: {q_text}"):
-                # 🌟 Q28 → multiple sliders
                 if q_num == 28:
                     st.markdown("⭐ **Please rate how true each statement feels for you (1 = Not at all true, 5 = Completely true):**")
-
                     if isinstance(options, str):
                         try:
                             options = json.loads(options)
                         except:
                             options = [options]
-
                     answers[q_num] = {}
                     for i, statement in enumerate(options, start=1):
                         answers[q_num][statement] = st.slider(
@@ -169,46 +200,68 @@ if role == "User / Client":
                 user_id = save_user_preferences(user_name, user_email, free_text_intro, free_text_end)
                 save_user_mcq_answers(user_id, answers)
                 st.session_state["user_submitted"] = True
+                st.session_state["user_id"] = user_id
 
-        # 🎬 Animation after user submits
         if st.session_state.get("user_submitted", False):
             st.success("✅ Your preferences have been saved!")
             _, col2, _ = st.columns([1, 2, 1])
             with col2:
                 lottie_json = load_lottiefile("animations/mental_wellbeing.json")
                 st_lottie(lottie_json, height=250, key="user_success")
-                st.markdown(
-                    """
-                    <div style="text-align:center; margin-top:-10px;">
-                        <h3 style="color:#2d046e;">🌱 Thank you for trusting us!</h3>
-                        <p style="font-size:16px; color:#555;">
-                            Your preferences will help us match you with the right therapist.  
-                            You’ve already taken the first step towards better mental health 💜  
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                # 💬 Feedback form link for users
-                st.markdown("---")
-                st.markdown(
-                    """
-                    <div style="text-align:center;">
-                        <h3 style="color:#2d046e;">📝 We'd love your feedback!</h3>
-                        <p style="font-size:16px; color:#555;">
-                            Help us make this platform even better.  
-                            Please take a minute to share your thoughts below 👇
-                        </p>
-                        <a href="https://forms.gle/de6JqeAo6mrM1iYv5" target="_blank"
-                        style="background-color:#8ec5fc; color:white; padding:10px 20px;
-                        border-radius:10px; text-decoration:none; font-weight:600;">
-                        💜 Give Feedback
-                        </a>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
 
+            st.markdown(
+                """
+                <div style="text-align:center; margin-top:-10px;">
+                    <h3 style="color:#2d046e;">🌱 Thank you for trusting us!</h3>
+                    <p style="font-size:16px; color:#555;">
+                        Your preferences will help us match you with the right therapist.  
+                        You’ve already taken the first step towards better mental health 💜  
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # --- Matching Section ---
+            st.markdown("### 💜 Your Top Therapist Matches")
+            matches = match_user_with_therapists(st.session_state["user_id"])
+
+            if not matches:
+                st.info("We’re gathering more therapist data — please check back soon!")
+            else:
+                for t_id, score in matches:
+                    profile_data = supabase.table("therapist_profiles").select("*").eq("user_id", t_id).execute().data
+                    if profile_data:
+                        profile = profile_data[0]
+                        st.markdown(f"""
+                        <div style="background: #f9f9ff; padding: 15px; border-radius: 12px; margin: 10px 0;">
+                            <h4 style="color:#2d046e;">{profile['name']}</h4>
+                            <p><b>Location:</b> {profile.get('practice_location', 'N/A')}</p>
+                            <p><b>Languages:</b> {', '.join(profile.get('languages', []))}</p>
+                            <p><b>Session Modes:</b> {', '.join(profile.get('session_modes', []))}</p>
+                            <p><b>Charge:</b> {profile.get('charge', 'N/A')}</p>
+                            <p><b>Match Score:</b> 🌸 {score*100:.2f}%</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown(
+                """
+                <div style="text-align:center;">
+                    <h3 style="color:#2d046e;">📝 We'd love your feedback!</h3>
+                    <p style="font-size:16px; color:#555;">
+                        Help us make this platform even better.  
+                        Please take a minute to share your thoughts below 👇
+                    </p>
+                    <a href="https://forms.gle/de6JqeAo6mrM1iYv5" target="_blank"
+                    style="background-color:#8ec5fc; color:white; padding:10px 20px;
+                    border-radius:10px; text-decoration:none; font-weight:600;">
+                    💜 Give Feedback
+                    </a>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # ---------------- THERAPIST FLOW ----------------
 elif role == "Therapist":
