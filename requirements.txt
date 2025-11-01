@@ -4,3 +4,4 @@ supabase
 streamlit-lottie
 requests
 pandas
+scikit-learn
