@@ -8,6 +8,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from streamlit_lottie import st_lottie
+import matching_engine
 
 # ---- local imports (matching engine expects env vars to be set first) ----
 # We'll set environment variables from Streamlit secrets and then import the matching function.
