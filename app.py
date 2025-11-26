@@ -87,40 +87,6 @@ def save_user_mcq_answers(user_id, answers_dict):
                 "answer": json.dumps(ans) if isinstance(ans, (list, dict)) else str(ans)
             }).execute()
 
-# --- Match user with therapists using cosine similarity ---
-def match_user_with_therapists(user_id):
-    user_answers = supabase.table("answers").select("question_id, answer").eq("user_id", user_id).execute().data
-    if not user_answers:
-        return []
-
-    therapist_answers = supabase.table("answers").select("user_id, question_id, answer").execute().data
-    if not therapist_answers:
-        return []
-
-    question_ids = sorted({ans["question_id"] for ans in user_answers + therapist_answers})
-    therapist_ids = sorted({ans["user_id"] for ans in therapist_answers})
-
-    # Create vector for user
-    user_vector = []
-    for q_id in question_ids:
-        ans = next((a["answer"] for a in user_answers if a["question_id"] == q_id), None)
-        user_vector.append(float(ans) if ans and str(ans).replace('.', '', 1).isdigit() else 0.0)
-    user_vector = np.array(user_vector).reshape(1, -1)
-
-    # Compute similarity
-    similarities = []
-    for t_id in therapist_ids:
-        t_answers = [a for a in therapist_answers if a["user_id"] == t_id]
-        therapist_vector = []
-        for q_id in question_ids:
-            ans = next((a["answer"] for a in t_answers if a["question_id"] == q_id), None)
-            therapist_vector.append(float(ans) if ans and str(ans).replace('.', '', 1).isdigit() else 0.0)
-        therapist_vector = np.array(therapist_vector).reshape(1, -1)
-        sim_score = cosine_similarity(user_vector, therapist_vector)[0][0]
-        similarities.append((t_id, sim_score))
-
-    similarities.sort(key=lambda x: x[1], reverse=True)
-    return similarities[:3]  # top 3 matches
 
 # ------------------- UI -------------------
 st.title("(❁´◡`❁) Welcome to Your Therapist")
@@ -222,29 +188,6 @@ if role == "User / Client":
                 unsafe_allow_html=True
             )
 
-            # --- Matching Section ---
-            st.markdown("### 💜 Your Top Therapist Matches")
-            matches = match_user_with_therapists(st.session_state["user_id"])
-
-            if not matches:
-                st.info("We’re gathering more therapist data — please check back soon!")
-            else:
-                for t_id, score in matches:
-                    profile_data = supabase.table("therapist_profiles").select("*").eq("user_id", t_id).execute().data
-                    if profile_data:
-                        profile = profile_data[0]
-                        st.markdown(f"""
-                        <div style="background: #f9f9ff; padding: 15px; border-radius: 12px; margin: 10px 0;">
-                            <h4 style="color:#2d046e;">{profile['name']}</h4>
-                            <p><b>Location:</b> {profile.get('practice_location', 'N/A')}</p>
-                            <p><b>Languages:</b> {', '.join(profile.get('languages', []))}</p>
-                            <p><b>Session Modes:</b> {', '.join(profile.get('session_modes', []))}</p>
-                            <p><b>Charge:</b> {profile.get('charge', 'N/A')}</p>
-                            <p><b>Match Score:</b> 🌸 {score*100:.2f}%</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-            st.markdown("---")
             st.markdown(
                 """
                 <div style="text-align:center;">
